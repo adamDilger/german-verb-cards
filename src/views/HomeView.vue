@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import dataString from '@/assets/prapositionen.csv?raw'
 import { parseString } from '@/utils/csv'
+import { computed } from '@vue/reactivity'
 import { ref, watch } from 'vue'
 
 type Row = {
@@ -16,7 +17,7 @@ const data: Array<Row> = parseString(dataString).map(r => ({
   Prapositionen: r[1],
   Casus: r[2],
   Translation: r[3],
-  Example: r[4]?.substring(0, r[4].length - 2),
+  Example: r[4]?.substring(0, r[4].length - 1),
 }))
 
 const correct = ref<{ prapositionen: boolean; casus: boolean } | null>(null)
@@ -36,8 +37,23 @@ function populateNextWord() {
 watch(currentRow, () => console.table(currentRow.value), { immediate: true })
 
 function tryCasus(e: Event) {
+  // @ts-expect-error wrong types
   casus.value = (e.submitter as HTMLButtonElement).name as 'A' | 'D'
   console.log(casus.value, e)
+
+  if (otherAnswers.value.length > 0) {
+    // see if the user has selected an answer in the list, and swap to that current word instead
+    const otherAnswer = otherAnswers.value.find(
+      r => r.Prapositionen.toLowerCase() === prapositionen.value.toLowerCase(),
+    )
+
+    if (otherAnswer) {
+      console.log(
+        `changed from ${currentRow.value.Prapositionen} to ${otherAnswer.Prapositionen}`,
+      )
+      currentRow.value = otherAnswer
+    }
+  }
 
   correct.value = {
     prapositionen:
@@ -51,6 +67,15 @@ function getCasusString(casus: 'A' | 'D' | string) {
   if (casus === '') return ''
   return casus === 'A' ? 'Akkusativ' : 'Dativ'
 }
+
+const otherAnswers = computed(() => {
+  const verb = currentRow.value.Verben
+  const similarPraps = data
+    .filter(r => r.Verben === verb)
+    .filter(r => r.Prapositionen !== currentRow.value.Prapositionen)
+
+  return similarPraps
+})
 </script>
 
 <template>
@@ -101,8 +126,15 @@ function getCasusString(casus: 'A' | 'D' | string) {
           "
           >{{ prapositionen }}</span
         >
+
         <div v-if="!correct.prapositionen" class="text-cyan-700 font-bold">
           {{ currentRow.Prapositionen }}
+        </div>
+
+        <div class="mt-4 text-yellow-600" v-if="otherAnswers.length">
+          <div v-for="o in otherAnswers" :key="o.Prapositionen">
+            Also correct: <b>{{ o.Prapositionen }}</b>
+          </div>
         </div>
       </div>
 
